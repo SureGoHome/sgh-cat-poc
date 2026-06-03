@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>SGH Cat Feedback POC</title>
+  <title>SGH Cat Auth POC</title>
 
   <style>
     body {
@@ -60,6 +60,10 @@
       background: #005f56;
     }
 
+    .secondary-button {
+      background: #475569;
+    }
+
     .notice {
       margin-top: 20px;
       font-size: 14px;
@@ -69,6 +73,10 @@
     .status {
       margin-top: 16px;
       font-weight: bold;
+    }
+
+    .hidden {
+      display: none;
     }
 
     .footer {
@@ -81,55 +89,93 @@
 
 <body>
   <div class="card">
-    <h1>SGH Cat Feedback POC</h1>
+    <h1>SGH Cat Auth POC</h1>
 
     <div class="cat">🐱</div>
 
-    <p>
-      Talk to the deployment cat.
-      The cat will silently judge your message and store it in Supabase.
-    </p>
-
-    <form id="catForm">
-      <input
-        type="text"
-        id="name"
-        placeholder="Your display name"
-        required
-      />
+    <!-- Login section -->
+    <div id="loginSection">
+      <p>
+        Please sign in before talking to the deployment cat.
+      </p>
 
       <input
         type="email"
-        id="email"
-        placeholder="Your email address"
+        id="loginEmail"
+        placeholder="Email"
+        required
       />
 
-      <select id="mood" required>
-        <option value="">How are you feeling?</option>
-        <option value="calm">Calm like a successful deployment</option>
-        <option value="stressed">Stressed like a broken pipeline</option>
-        <option value="confused">Confused like undocumented code</option>
-        <option value="happy">Happy because the cat is here</option>
-      </select>
-
-      <textarea
-        id="message"
-        placeholder="Say something to the SGH cat..."
+      <input
+        type="password"
+        id="loginPassword"
+        placeholder="Password"
         required
-      ></textarea>
+      />
 
-      <button type="submit">Send to Cat</button>
-    </form>
+      <button id="loginButton">Sign In</button>
 
-    <p id="status" class="status"></p>
+      <p id="loginStatus" class="status"></p>
 
-    <p class="notice">
-      Demo only. Please do not enter patient data, confidential SGH information,
-      internal system details, passwords, or real sensitive information.
-    </p>
+      <p class="notice">
+        Access is restricted to whitelisted demo users only.
+      </p>
+    </div>
+
+    <!-- Main app section -->
+    <div id="appSection" class="hidden">
+      <p id="welcomeText"></p>
+
+      <p>
+        Talk to the deployment cat.
+        The cat will silently judge your message and store it in Supabase.
+      </p>
+
+      <form id="catForm">
+        <input
+          type="text"
+          id="name"
+          placeholder="Your display name"
+          required
+        />
+
+        <input
+          type="email"
+          id="email"
+          placeholder="Your email address"
+        />
+
+        <select id="mood" required>
+          <option value="">How are you feeling?</option>
+          <option value="calm">Calm like a successful deployment</option>
+          <option value="stressed">Stressed like a broken pipeline</option>
+          <option value="confused">Confused like undocumented code</option>
+          <option value="happy">Happy because the cat is here</option>
+        </select>
+
+        <textarea
+          id="message"
+          placeholder="Say something to the SGH cat..."
+          required
+        ></textarea>
+
+        <button type="submit">Send to Cat</button>
+      </form>
+
+      <button id="logoutButton" class="secondary-button">
+        Sign Out
+      </button>
+
+      <p id="status" class="status"></p>
+
+      <p class="notice">
+        Demo only. Please do not enter patient data, confidential SGH information,
+        internal system details, passwords, or real sensitive information.
+      </p>
+    </div>
 
     <p class="footer">
-      Static GitHub Pages frontend + Supabase insert-only backend.
+      Static GitHub Pages frontend + Supabase Auth + whitelist table + RLS.
     </p>
   </div>
 
@@ -144,11 +190,122 @@
       SUPABASE_ANON_KEY
     );
 
-    const form = document.getElementById("catForm");
+    const loginSection = document.getElementById("loginSection");
+    const appSection = document.getElementById("appSection");
+
+    const loginButton = document.getElementById("loginButton");
+    const logoutButton = document.getElementById("logoutButton");
+
+    const loginStatus = document.getElementById("loginStatus");
     const statusText = document.getElementById("status");
+    const welcomeText = document.getElementById("welcomeText");
+
+    const form = document.getElementById("catForm");
+
+    let currentUser = null;
+
+    async function checkWhitelist(user) {
+      const { data, error } = await supabaseClient
+        .from("allowed_users")
+        .select("email")
+        .eq("email", user.email)
+        .maybeSingle();
+
+      if (error) {
+        console.error(error);
+        return false;
+      }
+
+      return data !== null;
+    }
+
+    async function showAppForUser(user) {
+      currentUser = user;
+
+      loginSection.classList.add("hidden");
+      appSection.classList.remove("hidden");
+
+      welcomeText.textContent = `Welcome, ${user.email}. The cat recognises you. 🐱✅`;
+
+      document.getElementById("email").value = user.email;
+    }
+
+    async function showLogin() {
+      currentUser = null;
+
+      appSection.classList.add("hidden");
+      loginSection.classList.remove("hidden");
+
+      loginStatus.textContent = "";
+      statusText.textContent = "";
+    }
+
+    async function handleLogin() {
+      loginStatus.textContent = "Checking with the cat... 🐾";
+
+      const email = document.getElementById("loginEmail").value.trim();
+      const password = document.getElementById("loginPassword").value;
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
+
+      if (error) {
+        console.error(error);
+        loginStatus.textContent = "Login failed. Please check your email/password.";
+        return;
+      }
+
+      const user = data.user;
+
+      const isAllowed = await checkWhitelist(user);
+
+      if (!isAllowed) {
+        await supabaseClient.auth.signOut();
+        loginStatus.textContent = "Login succeeded, but this email is not whitelisted.";
+        return;
+      }
+
+      await showAppForUser(user);
+    }
+
+    async function handleLogout() {
+      await supabaseClient.auth.signOut();
+      await showLogin();
+    }
+
+    async function checkExistingSession() {
+      const { data } = await supabaseClient.auth.getSession();
+
+      if (!data.session) {
+        await showLogin();
+        return;
+      }
+
+      const user = data.session.user;
+      const isAllowed = await checkWhitelist(user);
+
+      if (!isAllowed) {
+        await supabaseClient.auth.signOut();
+        await showLogin();
+        loginStatus.textContent = "Your session exists, but your email is not whitelisted.";
+        return;
+      }
+
+      await showAppForUser(user);
+    }
+
+    loginButton.addEventListener("click", handleLogin);
+    logoutButton.addEventListener("click", handleLogout);
 
     form.addEventListener("submit", async function(event) {
       event.preventDefault();
+
+      if (!currentUser) {
+        statusText.textContent = "Please sign in first.";
+        return;
+      }
 
       statusText.textContent = "Cat is thinking... 🐾";
 
@@ -164,18 +321,23 @@
             name: name,
             email: email,
             mood: mood,
-            message: message
+            message: message,
+            user_id: currentUser.id,
+            user_email: currentUser.email
           }
         ]);
 
       if (error) {
         console.error(error);
-        statusText.textContent = "Cat rejected the message. Check Supabase table/RLS settings.";
+        statusText.textContent = "Cat rejected the message. Check Supabase RLS settings.";
       } else {
         statusText.textContent = "Message stored. Cat approves. 🐱✅";
         form.reset();
+        document.getElementById("email").value = currentUser.email;
       }
     });
+
+    checkExistingSession();
   </script>
 </body>
 </html>
