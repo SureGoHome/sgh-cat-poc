@@ -4,19 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>SureGoHome Cat POC</title>
+  <title>SGH Cat Feedback POC</title>
 
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f4f9f8;
       color: #1f2933;
-      text-align: center;
       padding: 40px;
+      text-align: center;
     }
 
     .card {
-      max-width: 720px;
+      max-width: 760px;
       margin: auto;
       background: white;
       border-radius: 20px;
@@ -29,54 +29,153 @@
     }
 
     .cat {
-      font-size: 80px;
-      margin: 20px 0;
+      font-size: 72px;
+      margin: 12px 0;
     }
 
-    .button {
-      display: inline-block;
-      margin-top: 20px;
-      padding: 12px 20px;
+    input, textarea, select, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 12px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    button {
       background: #00796b;
       color: white;
-      border-radius: 10px;
-      text-decoration: none;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+    }
+
+    button:hover {
+      background: #005f56;
+    }
+
+    .notice {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .status {
+      margin-top: 16px;
       font-weight: bold;
     }
 
-    .small {
+    .footer {
       margin-top: 24px;
-      font-size: 14px;
-      color: #64748b;
+      font-size: 13px;
+      color: #94a3b8;
     }
   </style>
 </head>
 
 <body>
   <div class="card">
-    <h1>Hello from SureGoHome 👋</h1>
+    <h1>SGH Cat Feedback POC</h1>
 
     <div class="cat">🐱</div>
 
-    <h2>SGH GitHub Pages POC</h2>
-
     <p>
-      This is a tiny proof-of-concept app.
-      No backend. No database. No Docker. No drama.
+      Talk to the deployment cat.
+      The cat will silently judge your message and store it in Supabase.
     </p>
 
-    <p>
-      The cat has reviewed the deployment and confirms:
-      <strong>“Meow-del successfully published.”</strong>
+    <form id="catForm">
+      <input
+        type="text"
+        id="name"
+        placeholder="Your display name"
+        required
+      />
+
+      <input
+        type="email"
+        id="email"
+        placeholder="Your email address"
+      />
+
+      <select id="mood" required>
+        <option value="">How are you feeling?</option>
+        <option value="calm">Calm like a successful deployment</option>
+        <option value="stressed">Stressed like a broken pipeline</option>
+        <option value="confused">Confused like undocumented code</option>
+        <option value="happy">Happy because the cat is here</option>
+      </select>
+
+      <textarea
+        id="message"
+        placeholder="Say something to the SGH cat..."
+        required
+      ></textarea>
+
+      <button type="submit">Send to Cat</button>
+    </form>
+
+    <p id="status" class="status"></p>
+
+    <p class="notice">
+      Demo only. Please do not enter patient data, confidential SGH information,
+      internal system details, passwords, or real sensitive information.
     </p>
 
-    <a class="button" href="https://github.com/orgs/SureGoHome/repositories">
-      Back to SureGoHome Repositories
-    </a>
-
-    <p class="small">
-      Demo only. No patient data. No internal SGH data. Just vibes and cats.
+    <p class="footer">
+      Static GitHub Pages frontend + Supabase insert-only backend.
     </p>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    const SUPABASE_URL = "https://jcbhyqbthdcmgobonkcs.supabase.co/rest/v1/";
+    const SUPABASE_ANON_KEY = "sb_publishable_WljOE52pTLXJxZ2sdiaqtA_vA3K-xow";
+
+    const supabaseClient = supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    const form = document.getElementById("catForm");
+    const statusText = document.getElementById("status");
+
+    form.addEventListener("submit", async function(event) {
+      event.preventDefault();
+
+      statusText.textContent = "Cat is thinking... 🐾";
+
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const mood = document.getElementById("mood").value;
+      const message = document.getElementById("message").value.trim();
+
+      const { error } = await supabaseClient
+        .from("cat_messages")
+        .insert([
+          {
+            name: name,
+            email: email,
+            mood: mood,
+            message: message
+          }
+        ]);
+
+      if (error) {
+        console.error(error);
+        statusText.textContent = "Cat rejected the message. Check Supabase table/RLS settings.";
+      } else {
+        statusText.textContent = "Message stored. Cat approves. 🐱✅";
+        form.reset();
+      }
+    });
+  </script>
 </body>
 </html>
